@@ -19,30 +19,36 @@ from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 
 import streamlit as st
 
+# Add current directory to import path to access local utils
 sys.path.insert(0, ".")
+
+# Import custom palette utilities (clustering, sorting, visualization, etc.)
 from sophisticated_palette.utils import show_palette, model_dict, get_palette, \
     sort_func_dict, store_palette, display_matplotlib_code, display_plotly_code,\
      get_df_rgb, enhancement_range, plot_rgb_3d, plot_hsv_3d, print_praise
 
-
+# Load all image file paths from the 'images' folder
 gallery_files = glob(os.path.join(".", "images", "*"))
+# Create a dictionary mapping image names (cleaned up) to file paths
 gallery_dict = {
     os.path.splitext(os.path.basename(image_path))[0].replace("-", " "): image_path
     for image_path in gallery_files
 }
-    
+
+# Display logo and app info in the sidebar    
 st.image("logo.jpg")
 st.sidebar.title("Sophisticated Palette 🎨")
 st.sidebar.caption("Tell your data story with style.")
 st.sidebar.markdown("Made by Rena Herman, Rivka Palace, Shira Cohen, Tehila Hakkakian, Miri Eisenberg")
 
 
-st.sidebar.markdown("Checkout our github repo here: ")
+
+st.sidebar.markdown("Checkout our github repo here: https://github.com/tehilahak/sophisticated_palette.git")
 st.sidebar.markdown("---")
 
 toggle = st.sidebar.checkbox("Toggle Update", value=True, help="Continuously update the pallete with every change in the app.")
 click = st.sidebar.button("Find Palette", disabled=bool(toggle))
-
+# Palette generation settings
 st.sidebar.markdown("---")
 st.sidebar.header("Settings")
 palette_size = int(st.sidebar.number_input("palette size", min_value=1, max_value=20, value=5, step=1, help="Number of colors to infer from the image."))
@@ -51,12 +57,15 @@ sample_size = int(st.sidebar.number_input("sample size", min_value=5, max_value=
 # Image Enhancement
 enhancement_categories = enhancement_range.keys()
 enh_expander = st.sidebar.expander("Image Enhancements", expanded=False)
+# Image enhancement sliders in sidebar (e.g., brightness, contrast, color)
 with enh_expander:
     
     if st.button("reset"):
+        # Reset all enhancements to default (1.0)
         for cat in enhancement_categories:
             if f"{cat}_enhancement" in st.session_state:
                 st.session_state[f"{cat}_enhancement"] = 1.0
+# Create sliders for each enhancement category
 enhancement_factor_dict = {
     cat: enh_expander.slider(f"{cat} Enhancement", 
                             value=1., 
@@ -66,6 +75,7 @@ enhancement_factor_dict = {
                             key=f"{cat}_enhancement")
     for cat in enhancement_categories
 }
+# Tip for enhancement settings
 enh_expander.info("**Try the following**\n\nColor Enhancements = 2.6\n\nContrast Enhancements = 1.1\n\nBrightness Enhancements = 1.1")
 
 # Clustering Model 
@@ -92,7 +102,7 @@ with gallery_tab:
     file_name = st.selectbox("Select Art", 
                             options=options, index=options.index("Mona Lisa (Leonardo da Vinci)"))
     file = gallery_dict[file_name]
-
+ # Warn user if other input methods are active
     if st.session_state.get("file_uploader") is not None:
         st.warning("To use the Gallery, remove the uploaded image first.")
     if st.session_state.get("image_url") not in ["", None]:
@@ -100,6 +110,7 @@ with gallery_tab:
 
     img = Image.open(file)
 
+# Upload tab: user can upload their own image
 with upload_tab:
     file = st.file_uploader("Upload Art", key="file_uploader")
     if file is not None:
@@ -110,6 +121,7 @@ with upload_tab:
     if st.session_state.get("image_url") not in ["", None]:
         st.warning("To use the file uploader, remove the image URL first.")
 
+# URL tab: image will be loaded from a given URL
 with url_tab:
     url_text = st.empty()
     
@@ -170,6 +182,7 @@ if click or toggle:
         
         # find the hex representation for matplotlib and plotly settings
         palette_hex = [color for color in sorted_colors.values()][:palette_size]
+        # Show the palette and provide example code for using it
         with st.expander("Adopt this Palette", expanded=False):
             st.pyplot(show_palette(palette_hex))
 
@@ -178,12 +191,15 @@ if click or toggle:
             with matplotlib_tab:
                 display_matplotlib_code(palette_hex)
 
+                # Set color cycle for matplotlib using the palette
                 import matplotlib as mpl
                 from cycler import cycler
 
                 mpl.rcParams["axes.prop_cycle"] = cycler(color=palette_hex)
                 import matplotlib.pyplot as plt
 
+
+                # Create random example data
                 x = np.arange(5)
                 y_list = np.random.random((len(palette_hex), 5))+2
                 df = pd.DataFrame(y_list).T
@@ -206,6 +222,7 @@ if click or toggle:
             with plotly_tab:
                 display_plotly_code(palette_hex)
 
+                # Set up a custom Plotly template with the selected colors
                 import plotly.io as pio
                 import plotly.graph_objects as go
                 pio.templates["sophisticated"] = go.layout.Template(
@@ -215,8 +232,10 @@ if click or toggle:
                 )
                 pio.templates.default = 'sophisticated'
 
+                # Tabs to preview Plotly charts with the palette
                 area_tab, bar_tab = st.tabs(["area chart", "bar chart"])
 
+                # Display sample Plotly charts using the selected color palette
                 with area_tab:
                     fig_area = df.plot(kind="area", backend="plotly", )
                     st.header("Example Area Chart")
@@ -242,7 +261,7 @@ hex_str = "\n".join(palette_hex)
 st.download_button("📄 Download Palette as TXT", hex_str, file_name="palette.txt")
 
 
-
+# Create a new Excel file with a sheet named "Palette"
 def create_colored_excel(df):
     wb = Workbook()
     ws = wb.active
@@ -277,10 +296,10 @@ st.download_button(
     file_name="palette_colored.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-
+# Create a blank image to display color swatches side by side
 def get_palette_image(colors, size=(300, 80)):
     num_colors = len(colors)
-    swatch_width = size[0] // num_colors
+    swatch_width = size[0] // num_colors  # width of each color block
     swatch_height = 50
 
     img = Image.new("RGB", size, color="white")
@@ -307,17 +326,21 @@ def get_palette_image(colors, size=(300, 80)):
 
     return img
 
+# Generate and download the palette image as a PNG
 img_palette = get_palette_image(palette_hex)
 buf = BytesIO()
 img_palette.save(buf, format="PNG")
 st.download_button("🖼️ Download Palette Image", buf.getvalue(), file_name="palette.png", mime="image/png")
 
+# Option to save the current palette with a custom name
 with st.expander("Save this Palette", expanded=False):
     st.pyplot(show_palette(palette_hex))
     palette_name = st.text_input("Name your palette", value="My Palette")
+     # Initialize storage if it doesn't exist yet
     if st.button("Save Palette"):
         if "saved_palettes" not in st.session_state:
             st.session_state["saved_palettes"] = []
+        # Add current palette to saved list
         st.session_state["saved_palettes"].append({"name": palette_name, "colors": palette_hex})
         st.success(f"Palette '{palette_name}' saved!")
 
