@@ -1,12 +1,21 @@
 import os
+
+os.environ["OMP_NUM_THREADS"] = "2"
 import sys
 import pandas as pd
 import numpy as np 
 import requests
+import pandas as pd
+import pandas as pd
+import streamlit as st
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill
+
+
 
 from io import BytesIO
 from glob import glob
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageDraw, ImageFont
 
 import streamlit as st
 
@@ -17,21 +26,18 @@ from sophisticated_palette.utils import show_palette, model_dict, get_palette, \
 
 
 gallery_files = glob(os.path.join(".", "images", "*"))
-gallery_dict = {image_path.split("/")[-1].split(".")[-2].replace("-", " "): image_path
-    for image_path in gallery_files}
-
+gallery_dict = {
+    os.path.splitext(os.path.basename(image_path))[0].replace("-", " "): image_path
+    for image_path in gallery_files
+}
+    
 st.image("logo.jpg")
 st.sidebar.title("Sophisticated Palette 🎨")
 st.sidebar.caption("Tell your data story with style.")
-st.sidebar.markdown("Made by [Siavash Yasini](https://www.linkedin.com/in/siavash-yasini/)")
-st.sidebar.caption("Look behind the scenes of Sophisticated Palette [here](https://blog.streamlit.io/create-a-color-palette-from-any-image/).")
+st.sidebar.markdown("Made by Rena Herman, Rivka Palace, Shira Cohen, Tehila Hakkakian, Miri Eisenberg")
 
 
-with st.sidebar.expander("See My Other Streamlit Apps"):
-    st.caption("Snowflake Cheat Sheet: [App](https://snow-flake-cheat-sheet.streamlit.app/) 🎈,  [Blog Post](https://medium.com/snowflake/the-ungifted-amateurs-guide-to-snowflake-449284e4bd72) 📝")
-    st.caption("Wordler: [App](https://wordler.streamlit.app/) 🎈,  [Blog Post](https://blog.streamlit.io/the-ultimate-wordle-cheat-sheet/) 📝")
-    st.caption("Koffee of the World: [App](https://koffee.streamlit.app/) 🎈")
-
+st.sidebar.markdown("Checkout our github repo here: ")
 st.sidebar.markdown("---")
 
 toggle = st.sidebar.checkbox("Toggle Update", value=True, help="Continuously update the pallete with every change in the app.")
@@ -230,4 +236,94 @@ st.sidebar.write("---\n")
 st.sidebar.caption("""You can check out the source code [here](https://github.com/syasini/sophisticated_palette).
                       The `matplotlib` and `plotly` code snippets have been borrowed from [here](https://matplotlib.org/stable/users/prev_whats_new/dflt_style_changes.html) and [here](https://stackoverflow.com/questions/63011674/plotly-how-to-change-the-default-color-pallete-in-plotly).""")
 st.sidebar.write("---\n")
+
+# --- Download Options ---
+hex_str = "\n".join(palette_hex)
+st.download_button("📄 Download Palette as TXT", hex_str, file_name="palette.txt")
+
+
+
+def create_colored_excel(df):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Palette"
+
+    # Write header
+    ws.cell(row=1, column=1, value="Hex Code")
+
+    # Write data and apply fill color
+    for i, hex_code in enumerate(df["Hex Code"], start=2):
+        cell = ws.cell(row=i, column=1, value=hex_code)
+        fill = PatternFill(start_color=hex_code.lstrip('#').upper(),
+                           end_color=hex_code.lstrip('#').upper(),
+                           fill_type="solid")
+        cell.fill = fill
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+# Create DataFrame from your actual palette_hex
+df_palette = pd.DataFrame({"Hex Code": palette_hex})
+
+# Generate the Excel file bytes
+excel_file = create_colored_excel(df_palette)
+
+# Streamlit download button
+st.download_button(
+    label="📥 Download Palette as Excel (.xlsx)",
+    data=excel_file,
+    file_name="palette_colored.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+def get_palette_image(colors, size=(300, 80)):
+    num_colors = len(colors)
+    swatch_width = size[0] // num_colors
+    swatch_height = 50
+
+    img = Image.new("RGB", size, color="white")
+    draw = ImageDraw.Draw(img)
+
+    # Optional: load a better font (fallback to default if not found)
+    try:
+        font = ImageFont.truetype("arial.ttf", size=12)
+    except IOError:
+        font = ImageFont.load_default()
+
+    for i, color in enumerate(colors):
+        x0 = i * swatch_width
+        x1 = (i + 1) * swatch_width
+        # Draw swatch
+        draw.rectangle([x0, 0, x1, swatch_height], fill=color)
+
+        # Draw hex text centered under the swatch
+        hex_code = color.upper()
+        text_bbox = draw.textbbox((0, 0), hex_code, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_x = x0 + (swatch_width - text_width) // 2
+        draw.text((text_x, swatch_height + 5), hex_code, fill="black", font=font)
+
+    return img
+
+img_palette = get_palette_image(palette_hex)
+buf = BytesIO()
+img_palette.save(buf, format="PNG")
+st.download_button("🖼️ Download Palette Image", buf.getvalue(), file_name="palette.png", mime="image/png")
+
+with st.expander("Save this Palette", expanded=False):
+    st.pyplot(show_palette(palette_hex))
+    palette_name = st.text_input("Name your palette", value="My Palette")
+    if st.button("Save Palette"):
+        if "saved_palettes" not in st.session_state:
+            st.session_state["saved_palettes"] = []
+        st.session_state["saved_palettes"].append({"name": palette_name, "colors": palette_hex})
+        st.success(f"Palette '{palette_name}' saved!")
+
+# Show saved palettes
+if "saved_palettes" in st.session_state:
+    st.header("🎨 Your Saved Palettes")
+    for p in st.session_state["saved_palettes"]:
+        st.write(f"**{p['name']}**: {p['colors']}")
 
